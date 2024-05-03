@@ -1,5 +1,5 @@
 dev:
-	go run cmd/router/main.go
+	DEV_MODE=true go run cmd/router/main.go
 
 update-snapshot:
 	cd ./pkg/config && go test -update -race ./...

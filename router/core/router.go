@@ -783,6 +783,11 @@ func (r *Router) bootstrap(ctx context.Context) error {
 	return nil
 }
 
+type routerConfigPoll struct {
+	pollInterval time.Duration
+	ticker       *time.Ticker
+}
+
 // Start starts the server. It does not block. The server can be shutdown with Router.Shutdown().
 // Not safe for concurrent use.
 func (r *Router) Start(ctx context.Context) error {
@@ -793,22 +798,23 @@ func (r *Router) Start(ctx context.Context) error {
 	if err := r.bootstrap(ctx); err != nil {
 		return fmt.Errorf("failed to bootstrap application: %w", err)
 	}
+	routerConfig := r.routerConfig
 
 	// Start the server with the static config without polling
-	if r.routerConfig != nil {
-		r.logger.Info("Static router config provided. Polling is disabled. Updating router config is only possible by providing a config.")
-		return r.updateServerAndStart(ctx, r.routerConfig)
-	}
+	//if r.routerConfig != nil {
+	//	r.logger.Info("Static router config provided. Polling is disabled. Updating router config is only possible by providing a config.")
+	//	return r.updateServerAndStart(ctx, r.routerConfig)
+	//}
 
 	// when no static config is provided and no poller is configured, we can't start the server
-	if r.configPoller == nil {
-		return fmt.Errorf("config fetcher not provided. Please provide a static router config instead")
-	}
+	//if r.configPoller == nil {
+	//	return fmt.Errorf("config fetcher not provided. Please provide a static router config instead")
+	//}
 
-	routerConfig, err := r.configPoller.GetRouterConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get initial router config: %w", err)
-	}
+	//routerConfig, err := r.configPoller.GetRouterConfig(ctx)
+	//if err != nil {
+	//	return fmt.Errorf("failed to get initial router config: %w", err)
+	//}
 
 	if err := r.updateServerAndStart(ctx, routerConfig); err != nil {
 		r.logger.Error("Failed to start server with initial config", zap.Error(err))
@@ -817,17 +823,39 @@ func (r *Router) Start(ctx context.Context) error {
 
 	r.logger.Info("Polling for router config updates in the background")
 
-	r.configPoller.Subscribe(ctx, func(newConfig *nodev1.RouterConfig, oldVersion string) error {
-		r.logger.Info("Router config has changed, upgrading server",
-			zap.String("old_version", oldVersion),
-			zap.String("new_version", newConfig.GetVersion()),
-		)
-		if err := r.updateServerAndStart(ctx, newConfig); err != nil {
-			r.logger.Error("Failed to start server with new config. Trying again on the next update cycle.", zap.Error(err))
-			return err
+	//r.configPoller.Subscribe(ctx, func(newConfig *nodev1.RouterConfig, oldVersion string) error {
+	//	r.logger.Info("Router config has changed, upgrading server",
+	//		zap.String("old_version", oldVersion),
+	//		zap.String("new_version", newConfig.GetVersion()),
+	//	)
+	//	if err := r.updateServerAndStart(ctx, newConfig); err != nil {
+	//		r.logger.Error("Failed to start server with new config. Trying again on the next update cycle.", zap.Error(err))
+	//		return err
+	//	}
+	//	return nil
+	//})
+	interval := time.Second / 64
+	c := &routerConfigPoll{
+		pollInterval: interval,
+		ticker:       time.NewTicker(interval),
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				c.ticker.Stop()
+				return
+			case <-c.ticker.C:
+				r.logger.Info("Router config has changed, upgrading server",
+					zap.String("old_version", routerConfig.GetVersion()),
+					zap.String("new_version", routerConfig.GetVersion()),
+				)
+				if err := r.updateServerAndStart(ctx, routerConfig); err != nil {
+					r.logger.Error("Failed to start server with new config. Trying again on the next update cycle.", zap.Error(err))
+				}
+			}
 		}
-		return nil
-	})
+	}()
 
 	return nil
 }

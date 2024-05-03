@@ -1,6 +1,39 @@
-# yaml-language-server: $schema=./pkg/config/config.schema.json
-
-# See pkg/config/config.go for the full list of configuration options.
-# This file is used to debugging purposes only.
-
 version: "1"
+
+# General router options
+graph:
+  name: "production"
+  token: ""
+
+log_level: "info"
+listen_addr: "localhost:3002"
+playground_enabled: true
+introspection_enabled: true
+json_log: true
+shutdown_delay: 15s
+grace_period: 20s
+poll_interval: 10s
+health_check_path: "/health"
+readiness_check_path: "/health/ready"
+liveness_check_path: "/health/live"
+router_config_path: "config.json"
+
+cors:
+  allow_origins: ["*"]
+  allow_methods:
+    - HEAD
+    - GET
+    - POST
+  allow_headers:
+    - Origin
+    - Content-Length
+    - Content-Type
+  allow_credentials: true
+  max_age_minutes: 5m
+
+# Config for custom modules   
+# See "https://cosmo-docs.wundergraph.com/router/custom-modules" for more information   
+modules:
+  myModule:
+    # Arbitrary values, unmarshalled by the module
+    value: 1
